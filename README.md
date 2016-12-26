@@ -11,7 +11,7 @@ Project main goal is to keep very limited subset of ReactiveUI features:
 * this.WhenAny, this.WhenAnyValue, this.WhenAnyObservable
 * ObservableAsPropertyHelper, ToProperty
 * ReactiveObject, this.RaiseAndSetIfChanged
-* ReactiveCommand, ReactiveAsyncCommand
+* [7.0] ReactiveCommand
 
 Things not included in this project:
 * ReactiveList
