@@ -240,3 +240,5 @@ crashlytics-build.properties
 fabric.properties
 .idea/.idea.RxLite/.idea/
 .idea/.idea.RxLite/*
+/.droidres
+/Playground/Playground.Droid/Resources/Resource.Designer.cs

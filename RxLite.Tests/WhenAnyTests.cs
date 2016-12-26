@@ -1,4 +1,6 @@
-﻿using System.Reactive.Subjects;
+﻿using System.Reactive;
+using System.Reactive.Linq;
+using System.Reactive.Subjects;
 using NUnit.Framework;
 
 namespace RxLite.Tests
@@ -13,7 +15,7 @@ namespace RxLite.Tests
         {
             var vm = new WhenAnyViewModel();
             vm.ParamForWhenAny = paramValue;
-            Assert.AreEqual(expectedCanExecute, vm.CommandWithWhenAny.CanExecute(null));
+            Assert.AreEqual(expectedCanExecute, vm.CommandWithWhenAny.CanExecute.FirstAsync().Wait());
         }
 
         [TestCase(null, null, false)]
@@ -21,7 +23,7 @@ namespace RxLite.Tests
         [TestCase(null, "", false)]
         [TestCase("abc", null, false)]
         [TestCase("abc", "", false)]
-        [TestCase(null, "", false)]
+        //[TestCase(null, "", false)]
         [TestCase(null, "abc", false)]
         [TestCase("abc", "def", true)]
         public void Simple_MultipleWhenAny_CanExecute(string firstParamValue, string secondParamValue,
@@ -30,7 +32,7 @@ namespace RxLite.Tests
             var vm = new WhenAnyViewModel();
             vm.ParamForWhenAny = firstParamValue;
             vm.ParamForWhenAny2 = secondParamValue;
-            Assert.AreEqual(expectedCanExecute, vm.CommandWithMultipleWhenAny.CanExecute(null));
+            Assert.AreEqual(expectedCanExecute, vm.CommandWithMultipleWhenAny.CanExecute.FirstAsync().Wait());
         }
 
         [TestCase(null, false)]
@@ -40,7 +42,7 @@ namespace RxLite.Tests
         {
             var vm = new WhenAnyViewModel();
             vm.ParamForWhenAnyValue = paramValue;
-            Assert.AreEqual(expectedCanExecute, vm.CommandWithWhenAnyValue.CanExecute(null));
+            Assert.AreEqual(expectedCanExecute, vm.CommandWithWhenAnyValue.CanExecute.FirstAsync().Wait());
         }
 
         [TestCase(null, null, false)]
@@ -48,16 +50,18 @@ namespace RxLite.Tests
         [TestCase(null, "", false)]
         [TestCase("abc", null, false)]
         [TestCase("abc", "", false)]
-        [TestCase(null, "", false)]
+        //[TestCase(null, "", false)]
         [TestCase(null, "abc", false)]
         [TestCase("abc", "def", true)]
         public void Simple_MultipleWhenAnyValue_CanExecute(string firstParamValue, string secondParamValue,
             bool expectedCanExecute)
         {
-            var vm = new WhenAnyViewModel();
-            vm.ParamForWhenAnyValue = firstParamValue;
-            vm.ParamForWhenAnyValue2 = secondParamValue;
-            Assert.AreEqual(expectedCanExecute, vm.CommandWithMultipleWhenAnyValue.CanExecute(null));
+            var vm = new WhenAnyViewModel
+            {
+                ParamForWhenAnyValue = firstParamValue,
+                ParamForWhenAnyValue2 = secondParamValue
+            };
+            Assert.AreEqual(expectedCanExecute, vm.CommandWithMultipleWhenAnyValue.CanExecute.FirstAsync().Wait());
         }
 
         private class WhenAnyViewModel : ReactiveObject
@@ -75,23 +79,23 @@ namespace RxLite.Tests
             public WhenAnyViewModel()
             {
                 var canExecute = this.WhenAny(vm => vm.ParamForWhenAny, x => !string.IsNullOrWhiteSpace(x.Value));
-                CommandWithWhenAny = ReactiveCommand.Create(canExecute);
+                CommandWithWhenAny = ReactiveCommand.Create(() => Unit.Default, canExecute);
 
                 var canExecute2 = this.WhenAnyValue<WhenAnyViewModel, bool, string>(vm => vm.ParamForWhenAnyValue,
                     x => !string.IsNullOrWhiteSpace(x));
-                CommandWithWhenAnyValue = ReactiveCommand.Create(canExecute2);
+                CommandWithWhenAnyValue = ReactiveCommand.Create(() => Unit.Default, canExecute2);
 
                 ParamForObservable = new Subject<bool>();
-                CommandWithObservable = ReactiveCommand.Create(ParamForObservable);
+                CommandWithObservable = ReactiveCommand.Create(() => Unit.Default, ParamForObservable);
 
                 var canExecute3 = this.WhenAny(vm => vm.ParamForWhenAny, vm => vm.ParamForWhenAny2,
                     (first, second) =>
                         !string.IsNullOrWhiteSpace(first.Value) && !string.IsNullOrWhiteSpace(second.Value));
-                CommandWithMultipleWhenAny = ReactiveCommand.Create(canExecute3);
+                CommandWithMultipleWhenAny = ReactiveCommand.Create(() => Unit.Default, canExecute3);
 
                 var canExecute4 = this.WhenAnyValue(vm => vm.ParamForWhenAnyValue, vm => vm.ParamForWhenAnyValue2,
                     (first, second) => !string.IsNullOrWhiteSpace(first) && !string.IsNullOrWhiteSpace(second));
-                CommandWithMultipleWhenAnyValue = ReactiveCommand.Create(canExecute4);
+                CommandWithMultipleWhenAnyValue = ReactiveCommand.Create(() => true, canExecute4);
             }
 
             public string ParamForWhenAny
@@ -124,15 +128,15 @@ namespace RxLite.Tests
                 set { this.RaiseAndSetIfChanged(ref _paramForObservable, value); }
             }
 
-            public ReactiveCommand<object> CommandWithWhenAny { get; }
+            public ReactiveCommand CommandWithWhenAny { get; }
 
-            public ReactiveCommand<object> CommandWithMultipleWhenAny { get; }
+            public ReactiveCommand CommandWithMultipleWhenAny { get; }
 
-            public ReactiveCommand<object> CommandWithWhenAnyValue { get; }
+            public ReactiveCommand CommandWithWhenAnyValue { get; }
 
-            public ReactiveCommand<object> CommandWithMultipleWhenAnyValue { get; }
+            public ReactiveCommand CommandWithMultipleWhenAnyValue { get; }
 
-            public ReactiveCommand<object> CommandWithObservable { get; }
+            public ReactiveCommand<Unit, Unit> CommandWithObservable { get; }
         }
 
         [Test]
@@ -141,10 +145,10 @@ namespace RxLite.Tests
             var vm = new WhenAnyViewModel();
 
             vm.ParamForObservable.OnNext(false);
-            Assert.IsFalse(vm.CommandWithObservable.CanExecute(null));
+            Assert.IsFalse(vm.CommandWithObservable.CanExecute.FirstAsync().Wait());
 
             vm.ParamForObservable.OnNext(true);
-            Assert.IsTrue(vm.CommandWithObservable.CanExecute(null));
+            Assert.IsTrue(vm.CommandWithObservable.CanExecute.FirstAsync().Wait());
         }
     }
 }

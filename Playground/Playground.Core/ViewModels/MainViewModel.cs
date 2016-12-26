@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
+using System.Reactive;
 using System.Reactive.Linq;
 using System.Runtime.Serialization;
 using System.Text.RegularExpressions;
@@ -43,7 +44,7 @@ namespace Playground.Core.ViewModels
 
         public MainViewModel()
         {
-            ExecuteSearch = ReactiveCommand.CreateAsyncTask(_ => GetSearchResultsFromFlickr(SearchTerm));
+			ExecuteSearch = ReactiveCommand.CreateFromTask(_ => GetSearchResultsFromFlickr(SearchTerm));
 
             /* Creating our UI declaratively
              * 
@@ -120,7 +121,7 @@ namespace Playground.Core.ViewModels
         // We will describe this later, but ReactiveCommand is a Command
         // (like "Open", "Copy", "Delete", etc), that manages a task running
         // in the background.
-        public ReactiveCommand<List<FlickrPhoto>> ExecuteSearch { get; protected set; }
+        public ReactiveCommand<Unit, List<FlickrPhoto>> ExecuteSearch { get; protected set; }
         public List<FlickrPhoto> SearchResults => _searchResults.Value;
         public bool SpinnerVisibility => _spinnerVisibility.Value;
 

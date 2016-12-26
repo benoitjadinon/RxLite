@@ -3,22 +3,25 @@ using System.Collections.Generic;
 using System.Reactive;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
-using System.Reactive.Subjects;
 using System.Threading.Tasks;
 using NUnit.Framework;
+using System.Diagnostics;
+using System.Reactive.Subjects;
+using Microsoft.Reactive.Testing;
+using System.Linq;
 
 namespace RxLite.Tests
 {
     [TestFixture]
-    public class ReactiveCommandTests
+    public class ReactiveCommandTests : ReactiveTest
     {
-        private static ReactiveCommand<object> CreateCommand(
+        private static ReactiveCommand<object, object> CreateCommand(
             IObservable<bool> canExecute = null, IScheduler scheduler = null)
         {
-            return ReactiveCommand.Create(canExecute, scheduler);
+            return ReactiveCommand.Create<object, object>(param => param, canExecute, scheduler);
         }
 
-        private static async Task AssertThrowsOnExecuteAsync(IReactiveCommand<Unit> command, Exception exception)
+        private static async Task AssertThrowsOnExecuteAsync(ReactiveCommand<Unit, Unit> command, Exception exception)
         {
             command.ThrownExceptions.Subscribe();
 
@@ -26,7 +29,7 @@ namespace RxLite.Tests
 
             try
             {
-                await command.ExecuteAsync();
+                await command.Execute();
             }
             catch (Exception ex)
             {
@@ -54,19 +57,21 @@ namespace RxLite.Tests
 
             var exceptions = new List<Exception>();
             var canExecuteStates = new List<bool>();
-            fixture.CanExecuteObservable.Subscribe(canExecuteStates.Add);
+            fixture.CanExecute.Subscribe(canExecuteStates.Add);
             fixture.ThrownExceptions.Subscribe(exceptions.Add);
 
             canExecute.OnNext(false);
-            Assert.False(fixture.CanExecute(null));
+            Assert.False(fixture.CanExecute.FirstAsync().Wait());
 
             canExecute.OnNext(true);
-            Assert.True(fixture.CanExecute(null));
+            Assert.True(fixture.CanExecute.FirstAsync().Wait());
+
+			fixture.Execute().Subscribe();
 
             canExecute.OnError(new Exception("Aieeeee!"));
 
             // The command should latch to false forever
-            Assert.False(fixture.CanExecute(null));
+            Assert.False(fixture.CanExecute.FirstAsync().Wait());
 
             Assert.AreEqual(1, exceptions.Count);
             Assert.AreEqual("Aieeeee!", exceptions[0].Message);
@@ -80,7 +85,7 @@ namespace RxLite.Tests
         {
             var exception = new Exception("Aieeeee!");
 
-            var command = ReactiveCommand.CreateAsyncObservable(_ => ThrowAsync(exception));
+            var command = ReactiveCommand.CreateFromObservable<Unit, Unit>(_ => ThrowAsync(exception));
 
             await AssertThrowsOnExecuteAsync(command, exception);
         }
@@ -90,29 +95,43 @@ namespace RxLite.Tests
         {
             var exception = new Exception("Aieeeee!");
 
-            var command = ReactiveCommand.CreateAsyncObservable(_ => ThrowSync(exception));
+            var command = ReactiveCommand.CreateFromObservable<Unit, Unit>(_ => ThrowSync(exception));
 
             await AssertThrowsOnExecuteAsync(command, exception);
         }
 
         [Test]
-        public void ExecuteDoesNotThrowOnAsyncError()
-        {
-            var command = ReactiveCommand.CreateAsyncObservable(_ => ThrowAsync(new Exception("Aieeeee!")));
+		public void ExecuteDoesNotThrowOnAsyncError()
+		{
+			var command = ReactiveCommand.CreateFromObservable<Unit, Unit>(_ => ThrowAsync(new Exception("Aieeeee!")));
 
-            command.ThrownExceptions.Subscribe();
+		    Exception ex = null;
+		    command.ThrownExceptions.Subscribe(x =>
+		    {
+		        ex = x;
+		    });
 
-            command.Execute(null);
-        }
+		    command.Execute().Subscribe(
+		        r => Debug.WriteLine(r),
+		        e => Debug.WriteLine(e)
+		    );
 
-        [Test]
+		    Assert.NotNull(ex);
+		}
+
+		[Test]
         public void ExecuteDoesNotThrowOnError()
         {
-            var command = ReactiveCommand.CreateAsyncObservable(_ => ThrowSync(new Exception("Aieeeee!")));
+			var command = ReactiveCommand.CreateFromObservable<Unit, Unit>(_ => ThrowSync(new Exception("Aieeeee!")));
 
-            command.ThrownExceptions.Subscribe();
+			Exception ex = null;
 
-            command.Execute(null);
+			command.Execute().Subscribe(
+				r => Debug.WriteLine(r),
+				e => ex = e
+			);
+
+			Assert.NotNull(ex);
         }
 
         [Test]
@@ -128,7 +147,7 @@ namespace RxLite.Tests
 
             foreach (var i in input)
             {
-                await fixture.ExecuteAsyncTask(i);
+                await fixture.Execute(i);
             }
 
             Assert.AreEqual(new[] { 1, 1 }, oddList);
@@ -140,41 +159,29 @@ namespace RxLite.Tests
         {
             var fixture = CreateCommand();
 
-            fixture.CanExecute(null);
+            //fixture.CanExecute(null);
 
-            Assert.IsNotNull(fixture.CanExecuteObservable);
-        }
-
-        [Test]
-        public void ObservableCanExecuteIsNotNullAfterCanExecuteChangedEventAdded()
-        {
-            var fixture = CreateCommand(null);
-
-            fixture.CanExecuteChanged += (sender, args) => { };
-
-            Assert.IsNotNull(fixture.CanExecuteObservable);
+            Assert.IsNotNull(fixture.CanExecute);
         }
 
         [Test]
         public void ReactiveCommand_DefaultCanExecute_IsTrue()
         {
             var command = CreateCommand();
-            Assert.IsTrue(command.CanExecute(true));
+            Assert.IsTrue(command.CanExecute.FirstAsync().Wait());
         }
 
         [Test]
-        public async void ReactiveCommand_ExcecuteAsync_Works()
+        public void ReactiveCommand_Excecute_Works()
         {
-            var command = CreateCommand();
+			var testScheduler = new TestScheduler();
+			var command = CreateCommand(scheduler:testScheduler);
 
-            var result = string.Empty;
-            command.Subscribe(x => result = x as string);
+			var actual = testScheduler.Start(() => {
+				return command.Execute("test");
+			});
 
-            await command.ExecuteAsyncTask("Test");
-            Assert.AreEqual("Test", result);
-
-            await command.ExecuteAsyncTask("Test2");
-            Assert.AreEqual("Test2", result);
+			actual.Messages.First().Value.Equals("test");
         }
     }
 }
